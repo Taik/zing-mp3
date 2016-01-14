@@ -4,14 +4,14 @@ import (
 	"encoding/xml"
 	"errors"
 	"flag"
-	"log"
+	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
-	"fmt"
 
 	"github.com/PuerkitoBio/goquery"
-	"io"
+	"github.com/mgutz/logxi/v1"
 )
 
 var (
@@ -33,8 +33,8 @@ type ZingAlbum struct {
 	Items   []ZingAlbumItem `xml:"item"`
 }
 
-// GetAlbum parses a zing MP3 URL and returns a ZingAlbum associated with the current player on the page.
-func GetAlbum(zingURL string) (*ZingAlbum, error) {
+// ParseAlbumData parses a zing MP3 URL and returns a ZingAlbum associated with the current player on the page.
+func ParseAlbumData(zingURL string) (*ZingAlbum, error) {
 	doc, err := goquery.NewDocument(zingURL)
 	if err != nil {
 		return nil, err
@@ -60,10 +60,11 @@ func GetAlbum(zingURL string) (*ZingAlbum, error) {
 	return album, nil
 }
 
-func DownloadAlbumItem(item *ZingAlbumItem) error {
+// DownloadAlbumItem fetches the song from DownloadURL and returns an os.File which represents the file on-disk.
+func DownloadAlbumItem(item *ZingAlbumItem) (*os.File, error) {
 	response, err := http.Get(item.DownloadURL)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer response.Body.Close()
 
@@ -73,9 +74,32 @@ func DownloadAlbumItem(item *ZingAlbumItem) error {
 	)
 	fd, err := os.Create(filename)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	io.Copy(fd, response.Body)
+	return fd, nil
+}
+
+// DownloadAlbum initializes
+func DownloadAlbum(zingURL string) error {
+	album, err := ParseAlbumData(zingURL)
+	if err != nil {
+		return err
+	}
+
+	log.Debug("Found items",
+		"item_count", len(album.Items),
+		"album_url", zingURL,
+	)
+	for _, item := range album.Items {
+		log.Info("Processing item",
+			"artist", item.Artist,
+			"title", item.Title,
+			"download_url", item.DownloadURL,
+		)
+		fd, _ := DownloadAlbumItem(&item)
+	}
+
 	return nil
 }
 
@@ -85,10 +109,5 @@ func main() {
 	)
 	flag.Parse()
 
-	album, err := GetAlbum(*zingURL)
-	log.Printf("%v %v", album, err)
-	for _, item := range album.Items {
-		log.Printf("%s - %s (%s)\n", item.Artist, item.Title, item.DownloadURL)
-		DownloadAlbumItem(&item)
-	}
+	DownloadAlbum(*zingURL)
 }
