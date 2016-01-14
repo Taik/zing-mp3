@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/mikkyang/id3-go"
 	log "gopkg.in/inconshreveable/log15.v2"
 )
 
@@ -86,6 +87,24 @@ func DownloadAlbumItem(item *ZingAlbumItem) (*os.File, error) {
 	return fd, nil
 }
 
+// UpdateMP3Tags updates the os.File with the MP3 data (artist and title).
+func UpdateMP3Tags(item *ZingAlbumItem, fd *os.File) error {
+	mp3, err := id3.Open(fd.Name())
+	if err != nil {
+		return err
+	}
+	defer mp3.Close()
+
+	// TODO: Add lyric frames
+	mp3.SetArtist(item.Artist)
+	mp3.SetTitle(item.Title)
+	mp3.SetAlbum("")
+	mp3.SetGenre("")
+	mp3.SetYear("")
+
+	return nil
+}
+
 // DownloadAlbum initializes
 func DownloadAlbum(zingURL string) error {
 	album, err := ParseAlbumData(zingURL)
@@ -93,7 +112,7 @@ func DownloadAlbum(zingURL string) error {
 		return err
 	}
 
-	log.Debug("Found items",
+	log.Debug("Found items to download",
 		"item_count", len(album.Items),
 		"album_url", zingURL,
 	)
@@ -103,10 +122,22 @@ func DownloadAlbum(zingURL string) error {
 			"title", item.Title,
 			"download_url", item.DownloadURL,
 		)
-		fd, _ := DownloadAlbumItem(&item)
-		log.Info("File downloaded",
-			"file_path", fd.Name(),
-		)
+
+		log.Debug("Downloading item", "download_url", item.DownloadURL)
+		fd, err := DownloadAlbumItem(&item)
+		if err != nil {
+			log.Error("Could not download item", "error", err)
+		} else {
+			log.Debug("File downloaded", "file_path", fd.Name())
+		}
+
+		log.Debug("Updating mp3 tags", "file_path", fd.Name())
+		err = UpdateMP3Tags(&item, fd)
+		if err != nil {
+			log.Error("Could not update mp3 tags", "file_path", fd.Name())
+		} else {
+			log.Debug("File mp3 tag updated", "file_path", fd.Name())
+		}
 	}
 
 	return nil
