@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/mgutz/logxi/v1"
+	log "gopkg.in/inconshreveable/log15.v2"
 )
 
 var (
@@ -35,6 +35,9 @@ type ZingAlbum struct {
 
 // ParseAlbumData parses a zing MP3 URL and returns a ZingAlbum associated with the current player on the page.
 func ParseAlbumData(zingURL string) (*ZingAlbum, error) {
+	log.Debug("Parsing for album data URL",
+		"zing_url", zingURL,
+	)
 	doc, err := goquery.NewDocument(zingURL)
 	if err != nil {
 		return nil, err
@@ -45,6 +48,9 @@ func ParseAlbumData(zingURL string) (*ZingAlbum, error) {
 		return nil, errNoPlayerFound
 	}
 
+	log.Debug("Found zing album data URL",
+		"album_data_xml", dataXMLURL,
+	)
 	response, err := http.Get(dataXMLURL)
 	if err != nil {
 		return nil, err
@@ -98,6 +104,9 @@ func DownloadAlbum(zingURL string) error {
 			"download_url", item.DownloadURL,
 		)
 		fd, _ := DownloadAlbumItem(&item)
+		log.Info("File downloaded",
+			"file_path", fd.Name(),
+		)
 	}
 
 	return nil
