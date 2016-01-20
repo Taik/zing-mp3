@@ -7,7 +7,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/Taik/zing-mp3/tags"
@@ -16,7 +18,8 @@ import (
 
 var (
 	// Logger is the logger instance to be used throughout the package
-	Logger           = log15.New()
+	Logger = log15.New()
+
 	errNoPlayerFound = errors.New("no HTML5 player instance found")
 	errInvalidURL    = errors.New("invalid url")
 )
@@ -82,7 +85,7 @@ func ParseAlbumData(zingURL string) (*Album, error) {
 }
 
 // DownloadAlbum initializes
-func DownloadAlbum(zingURL string) error {
+func DownloadAlbum(zingURL, downloadDir string) error {
 	album, err := ParseAlbumData(zingURL)
 	if err != nil {
 		return err
@@ -92,35 +95,51 @@ func DownloadAlbum(zingURL string) error {
 		"item_count", len(album.Items),
 		"album_url", zingURL,
 	)
-	for _, item := range album.Items {
-		Logger.Info("Processing item",
-			"artist", item.Artist,
-			"title", item.Title,
-			"download_url", item.DownloadURL,
-		)
 
-		Logger.Debug("Downloading item", "download_url", item.DownloadURL)
-		fd, err := DownloadAlbumItem(&item)
-		if err != nil {
-			Logger.Error("Could not download item", "error", err)
-		} else {
-			Logger.Debug("File downloaded", "file_path", fd.Name())
-		}
+	wg := &sync.WaitGroup{}
+	wg.Add(len(album.Items))
 
-		Logger.Debug("Updating mp3 tags", "file_path", fd.Name())
-		err = tags.UpdateMP3Tags(fd, item.Artist, item.Title)
-		if err != nil {
-			Logger.Error("Could not update mp3 tags", "file_path", fd.Name())
-		} else {
-			Logger.Debug("File mp3 tag updated", "file_path", fd.Name())
-		}
+	for _, v := range album.Items {
+		go func(item AlbumItem) {
+			defer wg.Done()
+			Logger.Info("Processing item",
+				"artist", item.Artist,
+				"title", item.Title,
+				"download_url", item.DownloadURL,
+			)
+
+			Logger.Debug("Downloading item", "download_url", item.DownloadURL)
+			fd, err := DownloadAlbumItem(&item, downloadDir)
+			if err != nil {
+				Logger.Error("Could not download item", "error", err)
+			} else {
+				Logger.Debug("File downloaded", "file_path", fd.Name())
+			}
+
+			Logger.Debug("Updating mp3 tags", "file_path", fd.Name())
+			err = tags.UpdateMP3Tags(fd, item.Artist, item.Title)
+			if err != nil {
+				Logger.Error("Could not update mp3 tags", "file_path", fd.Name())
+			} else {
+				Logger.Debug("File mp3 tag updated", "file_path", fd.Name())
+			}
+
+			Logger.Info("Item complete",
+				"artist", item.Artist,
+				"title", item.Title,
+				"file_path", fd.Name(),
+			)
+		}(v)
 	}
 
+	wg.Wait()
 	return nil
 }
 
 // DownloadAlbumItem fetches the song from DownloadURL and returns an os.File which represents the file on-disk.
-func DownloadAlbumItem(item *AlbumItem) (*os.File, error) {
+func DownloadAlbumItem(item *AlbumItem, downloadDir string) (*os.File, error) {
+	os.Mkdir(downloadDir, os.ModePerm)
+
 	response, err := http.Get(item.DownloadURL)
 	if err != nil {
 		return nil, err
@@ -131,7 +150,7 @@ func DownloadAlbumItem(item *AlbumItem) (*os.File, error) {
 		strings.TrimSpace(item.Artist),
 		strings.TrimSpace(item.Title),
 	)
-	fd, err := os.Create(filename)
+	fd, err := os.Create(filepath.Join(downloadDir, filename))
 	if err != nil {
 		return nil, err
 	}

@@ -9,11 +9,12 @@ import (
 
 func main() {
 	var (
-		zingURL = flag.String("url", "", "Zing MP3 URL to be parsed")
+		zingURL     = flag.String("url", "", "Zing MP3 URL to be parsed")
+		downloadDir = flag.String("dir", ".", "Directory to download into")
 	)
 	flag.Parse()
 
-	zing.Logger.SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StdoutHandler))
+	zing.Logger.SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StdoutHandler))
 
-	zing.DownloadAlbum(*zingURL)
+	zing.DownloadAlbum(*zingURL, *downloadDir)
 }
