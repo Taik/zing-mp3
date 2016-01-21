@@ -14,6 +14,12 @@
 			"branch": "master"
 		},
 		{
+			"importpath": "github.com/buaazp/fasthttprouter",
+			"repository": "https://github.com/buaazp/fasthttprouter",
+			"revision": "5723114a39950dd04fe654cc47ae8dfc41bfe82d",
+			"branch": "master"
+		},
+		{
 			"importpath": "github.com/djimenez/iconv-go",
 			"repository": "https://github.com/djimenez/iconv-go",
 			"revision": "5f6a5a4f0011195c0147545149ad54f4adb54757",
@@ -29,6 +35,12 @@
 			"importpath": "github.com/mikkyang/id3-go",
 			"repository": "https://github.com/mikkyang/id3-go",
 			"revision": "0168d962f1d773af3e29867138593203b653782e",
+			"branch": "master"
+		},
+		{
+			"importpath": "github.com/valyala/fasthttp",
+			"repository": "https://github.com/valyala/fasthttp",
+			"revision": "b127e96399591ae94200187ffe8abfda3beace26",
 			"branch": "master"
 		},
 		{
