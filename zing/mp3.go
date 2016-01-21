@@ -88,7 +88,11 @@ func ParseAlbumData(zingURL string) (*Album, error) {
 func DownloadAlbum(zingURL, downloadDir string) error {
 	album, err := ParseAlbumData(zingURL)
 	if err != nil {
-		return err
+		Logger.Error("Unable to parse album data",
+			"album_url", zingURL,
+			"error", err,
+		)
+		return nil
 	}
 
 	Logger.Debug("Found items to download",

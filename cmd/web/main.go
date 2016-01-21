@@ -11,12 +11,12 @@ import (
 )
 
 func zingAlbumHandler(ctx *fasthttp.RequestCtx, params fasthttprouter.Params) {
-	zingURL := params.ByName("albumURL")
+	zingURL := string(ctx.QueryArgs().Peek("url"))
 	log.Info("Zing-mp3 album request",
 		"zing_url", zingURL,
 	)
 
-	album, err := zing.ParseAlbumData(zingURL[1:len(zingURL)])
+	album, err := zing.ParseAlbumData(zingURL)
 	if err != nil {
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
 		fmt.Fprint(ctx, err)
@@ -24,7 +24,16 @@ func zingAlbumHandler(ctx *fasthttp.RequestCtx, params fasthttprouter.Params) {
 	}
 
 	ctx.SetStatusCode(fasthttp.StatusOK)
-	fmt.Fprintf(ctx, "zing_url: %s, item_count: %d", zingURL, len(album.Items))
+	fmt.Fprintf(ctx, "zing_url: %s, item_count: %d\n", zingURL, len(album.Items))
+
+	for i, item := range album.Items {
+		fmt.Fprintf(ctx, "%d. %s - %s\n",
+			i,
+			item.Artist,
+			item.Title,
+		)
+	}
+
 }
 
 func main() {
@@ -34,6 +43,6 @@ func main() {
 	zing.Logger.SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StdoutHandler))
 
 	router := fasthttprouter.New()
-	router.GET("/zing-mp3/album/*albumURL", zingAlbumHandler)
+	router.GET("/zing-mp3/album/", zingAlbumHandler)
 	fasthttp.ListenAndServe(fmt.Sprintf(":%d", *port), router.Handler)
 }
