@@ -1,8 +1,11 @@
 package main
 
 import (
+	"archive/zip"
 	"flag"
 	"fmt"
+	"io"
+	"net/http"
 
 	"github.com/Taik/zing-mp3/zing"
 	"github.com/buaazp/fasthttprouter"
@@ -24,16 +27,46 @@ func zingAlbumHandler(ctx *fasthttp.RequestCtx, params fasthttprouter.Params) {
 	}
 
 	ctx.SetStatusCode(fasthttp.StatusOK)
-	fmt.Fprintf(ctx, "zing_url: %s, item_count: %d\n", zingURL, len(album.Items))
 
-	for i, item := range album.Items {
-		fmt.Fprintf(ctx, "%d. %s - %s\n",
-			i,
-			item.Artist,
-			item.Title,
+	buf := zip.NewWriter(ctx)
+	for _, item := range album.Items {
+		log.Debug("Downloading item", "download_url", item.DownloadURL)
+		response, err := http.Get(item.DownloadURL)
+		if err != nil {
+			log.Error("Unable to request album item", "download_url", item.DownloadURL)
+			return
+		}
+
+		filename := item.Name()
+		log.Debug("Creating new item in archive",
+			"filename", filename,
 		)
-	}
 
+		f, err := buf.Create(filename)
+		if err != nil {
+			log.Error("Unable to create new item in archive",
+				"filename", filename,
+			)
+			continue
+		}
+
+		log.Debug("Copying buffer into item",
+			"filename", filename,
+		)
+		_, err = io.Copy(f, response.Body)
+		if err != nil {
+			log.Error("Unable to copy buffer to item in archive",
+				"filename", filename,
+			)
+			continue
+		}
+		log.Info("Processed album item",
+			"download_url", item.DownloadURL,
+			"filename", filename,
+		)
+		buf.Flush()
+	}
+	buf.Close()
 }
 
 func main() {
