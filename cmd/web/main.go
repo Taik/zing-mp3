@@ -2,10 +2,12 @@ package main
 
 import (
 	"archive/zip"
+	"bytes"
 	"flag"
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 
 	"github.com/Taik/zing-mp3/zing"
 	"github.com/buaazp/fasthttprouter"
@@ -28,45 +30,69 @@ func zingAlbumHandler(ctx *fasthttp.RequestCtx, params fasthttprouter.Params) {
 
 	ctx.SetStatusCode(fasthttp.StatusOK)
 
-	buf := zip.NewWriter(ctx)
+	zipBuffer := zip.NewWriter(ctx)
+	zipLock := &sync.Mutex{}
+	wg := &sync.WaitGroup{}
+	wg.Add(len(album.Items))
+
 	for _, item := range album.Items {
-		log.Debug("Downloading item", "download_url", item.DownloadURL)
-		response, err := http.Get(item.DownloadURL)
-		if err != nil {
-			log.Error("Unable to request album item", "download_url", item.DownloadURL)
-			return
-		}
+		go func(item zing.AlbumItem) {
+			defer wg.Done()
+			buf := &bytes.Buffer{}
 
-		filename := item.Name()
-		log.Debug("Creating new item in archive",
-			"filename", filename,
-		)
+			log.Debug("Downloading item", "download_url", item.DownloadURL)
+			response, err := http.Get(item.DownloadURL)
+			if err != nil {
+				log.Error("Unable to request album item", "download_url", item.DownloadURL)
+				return
+			}
+			defer response.Body.Close()
 
-		f, err := buf.Create(filename)
-		if err != nil {
-			log.Error("Unable to create new item in archive",
+			_, err = io.Copy(buf, response.Body)
+			if err != nil {
+				log.Error("Unable to copy buffer",
+					"content_len", response.ContentLength,
+				)
+				return
+			}
+
+			filename := item.Name()
+			log.Debug("Creating new item in archive",
 				"filename", filename,
 			)
-			continue
-		}
 
-		log.Debug("Copying buffer into item",
-			"filename", filename,
-		)
-		_, err = io.Copy(f, response.Body)
-		if err != nil {
-			log.Error("Unable to copy buffer to item in archive",
+			zipLock.Lock()
+			defer zipLock.Unlock()
+
+			f, err := zipBuffer.Create(filename)
+			if err != nil {
+				log.Error("Unable to create new item in archive",
+					"filename", filename,
+				)
+				return
+			}
+
+			log.Debug("Copying buffer into item",
 				"filename", filename,
 			)
-			continue
-		}
-		log.Info("Processed album item",
-			"download_url", item.DownloadURL,
-			"filename", filename,
-		)
-		buf.Flush()
+
+			_, err = io.Copy(f, buf)
+			if err != nil {
+				log.Error("Unable to copy buffer into zip file",
+					"filename", filename,
+				)
+				return
+			}
+
+			log.Info("Processed album item",
+				"download_url", item.DownloadURL,
+				"filename", filename,
+			)
+			zipBuffer.Flush()
+		}(item)
 	}
-	buf.Close()
+	wg.Wait()
+	zipBuffer.Close()
 }
 
 func main() {
