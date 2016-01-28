@@ -1,0 +1,27 @@
+hash: cf38634ef01bf6091249188fb6703c48041fe799480502c7d2ec146341e1d4c1
+updated: 2016-01-28T15:36:42.645037667-05:00
+imports:
+- name: github.com/andybalholm/cascadia
+  version: 3ad29d1ad1c4f2023e355603324348cf1f4b2d48
+- name: github.com/buaazp/fasthttprouter
+  version: 5723114a39950dd04fe654cc47ae8dfc41bfe82d
+- name: github.com/djimenez/iconv-go
+  version: 5f6a5a4f0011195c0147545149ad54f4adb54757
+- name: github.com/mattn/go-colorable
+  version: 4af63d73f5bea08b682ad2cd198b1e607afd6be0
+- name: github.com/mikkyang/id3-go
+  version: 0168d962f1d773af3e29867138593203b653782e
+- name: github.com/PuerkitoBio/goquery
+  version: 417cce822c7b9a379df5824be95228d177c5698b
+- name: github.com/valyala/fasthttp
+  version: 359b3a1dd826fd4f7a4375f7072e7314ddad2400
+- name: golang.org/x/crypto
+  version: 1f22c0103821b9390939b6776727195525381532
+  repo: https://golang.org/x/crypto
+- name: golang.org/x/net
+  version: 04b9de9b512f58addf28c9853d50ebef61c3953e
+- name: golang.org/x/text
+  version: 6d3c22c4525a4da167968fa2479be5524d2e8bd0
+- name: gopkg.in/inconshreveable/log15.v2
+  version: b105bd37f74e5d9dc7b6ad7806715c7a2b83fd3f
+devImports: []

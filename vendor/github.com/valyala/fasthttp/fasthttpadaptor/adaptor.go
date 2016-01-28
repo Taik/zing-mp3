@@ -5,6 +5,7 @@ package fasthttpadaptor
 import (
 	"io"
 	"net/http"
+	"net/url"
 
 	"github.com/valyala/fasthttp"
 )
@@ -65,6 +66,13 @@ func NewFastHTTPHandler(h http.Handler) fasthttp.RequestHandler {
 		})
 		r.Header = hdr
 		r.Body = &netHTTPBody{body}
+		rURL, err := url.ParseRequestURI(r.RequestURI)
+		if err != nil {
+			ctx.Logger().Printf("cannot parse requestURI %q: %s", r.RequestURI, err)
+			ctx.Error("Internal Server Error", fasthttp.StatusInternalServerError)
+			return
+		}
+		r.URL = rURL
 
 		var w netHTTPResponseWriter
 		h.ServeHTTP(&w, &r)

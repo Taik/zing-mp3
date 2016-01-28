@@ -1,0 +1,24 @@
+sudo: false
+language: go
+
+go:
+  - 1.5
+  - tip
+
+before_install:
+  - go get -v github.com/axw/gocov/gocov
+  - go get -v github.com/mattn/goveralls
+  - if ! go get code.google.com/p/go.tools/cmd/cover; then go get golang.org/x/tools/cmd/cover; fi
+  - go get -v golang.org/x/tools/cmd/vet
+  - go get -v github.com/golang/lint/golint
+
+install:
+  - go get -d -t -v ./...
+  - go install -v
+
+script:
+  - go vet ./...
+  - $HOME/gopath/bin/golint ./...
+  - go test -v .
+  - $HOME/gopath/bin/goveralls -service=travis-ci
+

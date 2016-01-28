@@ -177,13 +177,14 @@ func (d *tcpDialer) NewDial(timeout time.Duration) DialFunc {
 		var conn net.Conn
 		startTime := time.Now()
 		n := uint32(len(addrs))
+		timeoutRemaining := timeout
 		for n > 0 {
-			conn, err = tryDial(network, &addrs[idx%n], timeout)
+			conn, err = tryDial(network, &addrs[idx%n], timeoutRemaining)
 			if err == nil {
 				return conn, nil
 			}
-			timeout -= time.Since(startTime)
-			if timeout <= 0 {
+			timeoutRemaining -= time.Since(startTime)
+			if timeoutRemaining <= 0 {
 				return nil, ErrDialTimeout
 			}
 			idx++
@@ -218,7 +219,7 @@ var ErrDialTimeout = errors.New("dialing to the given TCP address timed out")
 
 // DefaultDialTimeout is timeout used by Dial and DialDualStack
 // for establishing TCP connections.
-const DefaultDialTimeout = 5 * time.Second
+const DefaultDialTimeout = 60 * time.Second
 
 type tcpAddrEntry struct {
 	addrs    []net.TCPAddr
