@@ -1,1 +1,1 @@
-web: web --port=$PORT
+web: web -port=$PORT
