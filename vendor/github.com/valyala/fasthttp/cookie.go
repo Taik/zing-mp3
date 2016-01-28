@@ -73,7 +73,7 @@ func (c *Cookie) SetDomain(domain string) {
 	c.domain = append(c.domain[:0], domain...)
 }
 
-// SetDomainBytes sets cookie domain.
+// SetDomain
 func (c *Cookie) SetDomainBytes(domain []byte) {
 	c.domain = append(c.domain[:0], domain...)
 }

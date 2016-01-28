@@ -194,8 +194,7 @@ func (wp *workerPool) workerFunc(ch *workerChan) {
 		}
 		if err = wp.WorkerFunc(c); err != nil && err != errHijacked {
 			errStr := err.Error()
-			if !strings.Contains(errStr, "broken pipe") && !strings.Contains(errStr, "reset by peer") &&
-				!strings.Contains(errStr, "i/o timeout") {
+			if !strings.Contains(errStr, "broken pipe") && !strings.Contains(errStr, "reset by peer") {
 				wp.Logger.Printf("error when serving connection %q<->%q: %s", c.LocalAddr(), c.RemoteAddr(), err)
 			}
 		}

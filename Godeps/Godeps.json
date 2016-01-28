@@ -1,0 +1,56 @@
+{
+	"ImportPath": "github.com/Taik/zing-mp3",
+	"GoVersion": "go1.5",
+	"Packages": [
+		"./cmd/..."
+	],
+	"Deps": [
+		{
+			"ImportPath": "github.com/PuerkitoBio/goquery",
+			"Comment": "v0.3.2-80-g417cce8",
+			"Rev": "417cce822c7b9a379df5824be95228d177c5698b"
+		},
+		{
+			"ImportPath": "github.com/andybalholm/cascadia",
+			"Rev": "3ad29d1ad1c4f2023e355603324348cf1f4b2d48"
+		},
+		{
+			"ImportPath": "github.com/buaazp/fasthttprouter",
+			"Comment": "v1.1-21-g5723114",
+			"Rev": "5723114a39950dd04fe654cc47ae8dfc41bfe82d"
+		},
+		{
+			"ImportPath": "github.com/djimenez/iconv-go",
+			"Rev": "5f6a5a4f0011195c0147545149ad54f4adb54757"
+		},
+		{
+			"ImportPath": "github.com/mattn/go-colorable",
+			"Rev": "40e4aedc8fabf8c23e040057540867186712faa5"
+		},
+		{
+			"ImportPath": "github.com/mattn/go-isatty",
+			"Rev": "56b76bdf51f7708750eac80fa38b952bb9f32639"
+		},
+		{
+			"ImportPath": "github.com/mikkyang/id3-go",
+			"Rev": "0168d962f1d773af3e29867138593203b653782e"
+		},
+		{
+			"ImportPath": "github.com/valyala/fasthttp",
+			"Rev": "485098e5dc90f6cab18e62826e4b50f82286139b"
+		},
+		{
+			"ImportPath": "golang.org/x/net/html",
+			"Rev": "66f0418ca41253f8d1a024eb9754e9441a8e79b9"
+		},
+		{
+			"ImportPath": "golang.org/x/sys/unix",
+			"Rev": "20457ee8ea8546920d3f4e19e405da45250dc5a5"
+		},
+		{
+			"ImportPath": "gopkg.in/inconshreveable/log15.v2",
+			"Comment": "v2.11",
+			"Rev": "b105bd37f74e5d9dc7b6ad7806715c7a2b83fd3f"
+		}
+	]
+}

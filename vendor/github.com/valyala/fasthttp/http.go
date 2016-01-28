@@ -67,13 +67,11 @@ type Response struct {
 // SetRequestURI sets RequestURI.
 func (req *Request) SetRequestURI(requestURI string) {
 	req.Header.SetRequestURI(requestURI)
-	req.parsedURI = false
 }
 
 // SetRequestURIBytes sets RequestURI.
 func (req *Request) SetRequestURIBytes(requestURI []byte) {
 	req.Header.SetRequestURIBytes(requestURI)
-	req.parsedURI = false
 }
 
 // StatusCode returns response status code.
@@ -688,80 +686,7 @@ func (resp *Response) mustSkipBody() bool {
 	return resp.SkipBody || resp.Header.mustSkipContentLength()
 }
 
-var errRequestHostRequired = errors.New("missing required Host header in request")
-
-// WriteTo writes request to w. It implements io.WriterTo.
-func (req *Request) WriteTo(w io.Writer) (int64, error) {
-	return writeBufio(req, w)
-}
-
-// WriteTo writes response to w. It implements io.WriterTo.
-func (resp *Response) WriteTo(w io.Writer) (int64, error) {
-	return writeBufio(resp, w)
-}
-
-func writeBufio(hw httpWriter, w io.Writer) (int64, error) {
-	sw := acquireStatsWriter(w)
-	bw := acquireBufioWriter(sw)
-	err1 := hw.Write(bw)
-	err2 := bw.Flush()
-	releaseBufioWriter(bw)
-	n := sw.bytesWritten
-	releaseStatsWriter(sw)
-
-	err := err1
-	if err == nil {
-		err = err2
-	}
-	return n, err
-}
-
-type statsWriter struct {
-	w            io.Writer
-	bytesWritten int64
-}
-
-func (w *statsWriter) Write(p []byte) (int, error) {
-	n, err := w.w.Write(p)
-	w.bytesWritten += int64(n)
-	return n, err
-}
-
-func acquireStatsWriter(w io.Writer) *statsWriter {
-	v := statsWriterPool.Get()
-	if v == nil {
-		return &statsWriter{
-			w: w,
-		}
-	}
-	sw := v.(*statsWriter)
-	sw.w = w
-	return sw
-}
-
-func releaseStatsWriter(sw *statsWriter) {
-	sw.w = nil
-	sw.bytesWritten = 0
-	statsWriterPool.Put(sw)
-}
-
-var statsWriterPool sync.Pool
-
-func acquireBufioWriter(w io.Writer) *bufio.Writer {
-	v := bufioWriterPool.Get()
-	if v == nil {
-		return bufio.NewWriter(w)
-	}
-	bw := v.(*bufio.Writer)
-	bw.Reset(w)
-	return bw
-}
-
-func releaseBufioWriter(bw *bufio.Writer) {
-	bufioWriterPool.Put(bw)
-}
-
-var bufioWriterPool sync.Pool
+var errRequestHostRequired = errors.New("Missing required Host header in request")
 
 // Write writes request to w.
 //
@@ -797,7 +722,7 @@ func (req *Request) Write(w *bufio.Writer) error {
 	if hasBody {
 		_, err = w.Write(body)
 	} else if len(body) > 0 {
-		return fmt.Errorf("non-zero body for non-POST request. body=%q", body)
+		return fmt.Errorf("Non-zero body for non-POST request. body=%q", body)
 	}
 	return err
 }
@@ -925,6 +850,7 @@ func (resp *Response) Write(w *bufio.Writer) error {
 			}
 		}
 		if contentLength >= 0 {
+			resp.Header.SetContentLength(contentLength)
 			if err = resp.Header.Write(w); err != nil {
 				return err
 			}
@@ -947,10 +873,7 @@ func (resp *Response) Write(w *bufio.Writer) error {
 		return resp.closeBodyStream()
 	}
 
-	bodyLen := len(resp.body)
-	if sendBody || bodyLen > 0 {
-		resp.Header.SetContentLength(bodyLen)
-	}
+	resp.Header.SetContentLength(len(resp.body))
 	if err = resp.Header.Write(w); err != nil {
 		return err
 	}

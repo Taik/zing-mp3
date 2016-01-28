@@ -787,9 +787,9 @@ var (
 // It is recommended obtaining req and resp via AcquireRequest
 // and AcquireResponse in performance-critical code.
 func (c *HostClient) Do(req *Request, resp *Response) error {
-	retry, err := c.do(req, resp)
+	retry, err := c.do(req, resp, false)
 	if err != nil && retry && isIdempotent(req) {
-		_, err = c.do(req, resp)
+		_, err = c.do(req, resp, true)
 	}
 	return err
 }
@@ -798,14 +798,14 @@ func isIdempotent(req *Request) bool {
 	return req.Header.IsGet() || req.Header.IsHead() || req.Header.IsPut()
 }
 
-func (c *HostClient) do(req *Request, resp *Response) (bool, error) {
+func (c *HostClient) do(req *Request, resp *Response, newConn bool) (bool, error) {
 	if req == nil {
 		panic("BUG: req cannot be nil")
 	}
 
 	atomic.StoreUint32(&c.lastUseTime, uint32(time.Now().Unix()-startTimeUnix))
 
-	cc, err := c.acquireConn()
+	cc, err := c.acquireConn(newConn)
 	if err != nil {
 		return false, err
 	}
@@ -814,7 +814,7 @@ func (c *HostClient) do(req *Request, resp *Response) (bool, error) {
 	if c.WriteTimeout > 0 {
 		if err = conn.SetWriteDeadline(time.Now().Add(c.WriteTimeout)); err != nil {
 			c.closeConn(cc)
-			return true, err
+			return false, err
 		}
 	}
 
@@ -838,10 +838,12 @@ func (c *HostClient) do(req *Request, resp *Response) (bool, error) {
 		req.Header.ResetConnectionClose()
 	}
 
-	if err == nil {
-		err = bw.Flush()
-	}
 	if err != nil {
+		c.releaseWriter(bw)
+		c.closeConn(cc)
+		return false, err
+	}
+	if err = bw.Flush(); err != nil {
 		c.releaseWriter(bw)
 		c.closeConn(cc)
 		return true, err
@@ -856,11 +858,8 @@ func (c *HostClient) do(req *Request, resp *Response) (bool, error) {
 
 	if c.ReadTimeout > 0 {
 		if err = conn.SetReadDeadline(time.Now().Add(c.ReadTimeout)); err != nil {
-			if nilResp {
-				ReleaseResponse(resp)
-			}
 			c.closeConn(cc)
-			return true, err
+			return false, err
 		}
 	}
 
@@ -903,7 +902,7 @@ var (
 	ErrTimeout = errors.New("timeout")
 )
 
-func (c *HostClient) acquireConn() (*clientConn, error) {
+func (c *HostClient) acquireConn(newConn bool) (*clientConn, error) {
 	var cc *clientConn
 	createConn := false
 	startCleaner := false
@@ -911,7 +910,7 @@ func (c *HostClient) acquireConn() (*clientConn, error) {
 	var n int
 	c.connsLock.Lock()
 	n = len(c.conns)
-	if n == 0 {
+	if n == 0 || newConn {
 		maxConns := c.MaxConns
 		if maxConns <= 0 {
 			maxConns = DefaultMaxConnsPerHost
@@ -937,7 +936,7 @@ func (c *HostClient) acquireConn() (*clientConn, error) {
 		return nil, ErrNoFreeConns
 	}
 
-	conn, err := c.dialHostHard()
+	conn, err := c.dialHost()
 	if err != nil {
 		c.decConnsCount()
 		return nil, err
@@ -1071,32 +1070,6 @@ func (c *HostClient) nextAddr() string {
 	}
 	c.addrsLock.Unlock()
 	return addr
-}
-
-func (c *HostClient) dialHostHard() (conn net.Conn, err error) {
-	// attempt to dial all the available hosts before giving up.
-
-	c.addrsLock.Lock()
-	n := len(c.addrs)
-	c.addrsLock.Unlock()
-
-	if n == 0 {
-		// It looks like c.addrs isn't initialized yet.
-		n = 1
-	}
-
-	startTime := time.Now()
-	for n > 0 {
-		conn, err = c.dialHost()
-		if err == nil {
-			return conn, nil
-		}
-		if time.Since(startTime) > DefaultDialTimeout {
-			return nil, ErrDialTimeout
-		}
-		n--
-	}
-	return nil, err
 }
 
 func (c *HostClient) dialHost() (net.Conn, error) {

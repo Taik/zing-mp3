@@ -1,7 +1,0 @@
-package: github.com/Taik/zing-mp3
-import:
-- package: github.com/PuerkitoBio/goquery
-- package: github.com/buaazp/fasthttprouter
-- package: github.com/mikkyang/id3-go
-- package: github.com/valyala/fasthttp
-- package: gopkg.in/inconshreveable/log15.v2

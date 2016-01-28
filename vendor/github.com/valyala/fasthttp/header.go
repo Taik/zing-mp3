@@ -142,13 +142,18 @@ func (h *ResponseHeader) ResetConnectionClose() {
 
 // ConnectionClose returns true if 'Connection: close' header is set.
 func (h *RequestHeader) ConnectionClose() bool {
-	h.parseRawHeaders()
+	// h.parseRawHeaders() isn't called for performance reasons.
+	// Use ConnectionCloseReal for triggering raw headers parsing.
 	return h.connectionClose
 }
 
-func (h *RequestHeader) connectionCloseFast() bool {
-	// h.parseRawHeaders() isn't called for performance reasons.
-	// Use ConnectionClose for triggering raw headers parsing.
+// ConnectionCloseReal returns true if 'Connection: close' header is set.
+//
+// This method triggers full (slow) request headers' parsing
+// unlike ConnectionClose, so use it only if you really want determining
+// whether 'Connection: close' header is really set on the wire.
+func (h *RequestHeader) ConnectionCloseReal() bool {
+	h.parseRawHeaders()
 	return h.connectionClose
 }
 
@@ -454,7 +459,7 @@ func (h *RequestHeader) SetMethod(method string) {
 	h.method = append(h.method, method...)
 }
 
-// SetMethodBytes sets HTTP request method.
+// SetMethod sets HTTP request method.
 func (h *RequestHeader) SetMethodBytes(method []byte) {
 	h.method = append(h.method[:0], method...)
 }
@@ -475,7 +480,7 @@ func (h *RequestHeader) SetRequestURI(requestURI string) {
 	h.requestURI = append(h.requestURI[:0], requestURI...)
 }
 
-// SetRequestURIBytes sets RequestURI for the first HTTP request line.
+// SetRequestURI sets RequestURI for the first HTTP request line.
 // RequestURI must be properly encoded.
 // Use URI.RequestURI for constructing proper RequestURI if unsure.
 func (h *RequestHeader) SetRequestURIBytes(requestURI []byte) {
@@ -503,10 +508,6 @@ func (h *RequestHeader) IsPut() bool {
 
 // IsHead returns true if request method is HEAD.
 func (h *RequestHeader) IsHead() bool {
-	// Fast path
-	if h.isGet {
-		return false
-	}
 	return bytes.Equal(h.Method(), strHead)
 }
 
@@ -1347,7 +1348,7 @@ func (h *RequestHeader) parseFirstLine(buf []byte) (int, error) {
 		h.noHTTP11 = true
 		n = len(b)
 	} else if n == 0 {
-		return 0, fmt.Errorf("requestURI cannot be empty in %q", buf)
+		return 0, fmt.Errorf("RequestURI cannot be empty in %q", buf)
 	} else if !bytes.Equal(b[n+1:], strHTTP11) {
 		h.noHTTP11 = true
 	}
@@ -1465,7 +1466,7 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 	if h.contentLength < 0 {
 		h.contentLengthBytes = h.contentLengthBytes[:0]
 	}
-	if h.contentLength == -2 && !h.ConnectionUpgrade() && !h.mustSkipContentLength() {
+	if h.contentLength == -2 && !h.ConnectionUpgrade() {
 		h.h = setArg(h.h, strTransferEncoding, strIdentity)
 		h.connectionClose = true
 	}
@@ -1574,7 +1575,7 @@ func parseContentLength(b []byte) (int, error) {
 		return -1, err
 	}
 	if n != len(b) {
-		return -1, fmt.Errorf("non-numeric chars at the end of Content-Length")
+		return -1, fmt.Errorf("Non-numeric chars at the end of Content-Length")
 	}
 	return v, nil
 }
