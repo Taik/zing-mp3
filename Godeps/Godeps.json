@@ -36,6 +36,10 @@
 			"Rev": "0168d962f1d773af3e29867138593203b653782e"
 		},
 		{
+			"ImportPath": "github.com/oxtoacart/bpool",
+			"Rev": "4e1c5567d7c2dd59fa4c7c83d34c2f3528b025d6"
+		},
+		{
 			"ImportPath": "github.com/valyala/fasthttp",
 			"Rev": "485098e5dc90f6cab18e62826e4b50f82286139b"
 		},
