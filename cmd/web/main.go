@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"sync"
 
@@ -181,6 +182,10 @@ func main() {
 	)
 	flag.Parse()
 	zing.Logger.SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StdoutHandler))
+
+	go func() {
+		http.ListenAndServe("localhost:6060", nil)
+	}()
 
 	router := fasthttprouter.New()
 	router.GET("/album/", zingAlbumHandler)
