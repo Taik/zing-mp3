@@ -99,6 +99,8 @@ func main() {
 	var (
 		port = flag.Int("port", 8000, "Port to listen on")
 	)
+	flag.Parse()
+
 	zing.Logger.SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StdoutHandler))
 
 	router := fasthttprouter.New()
