@@ -14,6 +14,7 @@ import (
 
 	"github.com/Taik/zing-mp3/zing"
 	"github.com/buaazp/fasthttprouter"
+	"github.com/oxtoacart/bpool"
 	"github.com/valyala/fasthttp"
 	log "gopkg.in/inconshreveable/log15.v2"
 )
@@ -25,11 +26,13 @@ type albumJob struct {
 	zipQueue      chan zipFile
 	zipSync       *sync.WaitGroup
 	zipFile       *os.File
+
+	bufferPool *bpool.BufferPool
 }
 
 type zipFile struct {
 	Filename string
-	Buffer   io.Reader
+	Buffer   *bytes.Buffer
 }
 
 func newAlbumJob(album *zing.Album) (*albumJob, error) {
@@ -46,13 +49,14 @@ func newAlbumJob(album *zing.Album) (*albumJob, error) {
 		zipQueue:      make(chan zipFile),
 		zipSync:       &sync.WaitGroup{},
 		zipFile:       archive,
+		bufferPool:    bpool.NewBufferPool(8),
 	}, nil
 }
 
 func (a *albumJob) Start() {
 	// Start N workers
-	a.downloadSync.Add(4)
-	for i := 0; i < 4; i++ {
+	a.downloadSync.Add(8)
+	for i := 0; i < 8; i++ {
 		go a.startDownloader()
 	}
 
@@ -74,13 +78,15 @@ func (a *albumJob) startDownloader() {
 	defer a.downloadSync.Done()
 
 	for item := range a.downloadQueue {
+		buf := a.bufferPool.Get()
+
 		log.Debug("Processing album item",
 			"artist", item.Artist,
 			"title", item.Title,
 			"url", item.ItemURL,
 		)
 
-		buf, err := downloadURL(item.DownloadURL)
+		err := downloadURL(buf, item.DownloadURL)
 		if err != nil {
 			log.Error("Unable to download item",
 				"download_url", item.DownloadURL,
@@ -130,23 +136,23 @@ func (a *albumJob) startZipper() {
 			)
 			return
 		}
+		a.bufferPool.Put(file.Buffer)
 		zipBuffer.Flush()
 	}
 	log.Debug("Archive completed")
 }
 
-func downloadURL(url string) (io.Reader, error) {
-	buf := &bytes.Buffer{}
+func downloadURL(buf *bytes.Buffer, url string) error {
 	log.Debug("Downloading item", "download_url", url)
 	response, err := http.Get(url)
 	if err != nil {
 		log.Error("Unable to request album item", "download_url", url)
-		return nil, err
+		return err
 	}
 	defer response.Body.Close()
 	io.Copy(buf, response.Body)
 
-	return buf, nil
+	return nil
 }
 
 func zingAlbumHandler(ctx *fasthttp.RequestCtx, params fasthttprouter.Params) {
