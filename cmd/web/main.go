@@ -6,10 +6,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof"
-	"os"
 	"sync"
 
 	"github.com/Taik/zing-mp3/zing"
@@ -25,7 +23,7 @@ type albumJob struct {
 	downloadSync  *sync.WaitGroup
 	zipQueue      chan zipFile
 	zipSync       *sync.WaitGroup
-	zipFile       *os.File
+	zipWriter     io.Writer
 
 	bufferPool *bpool.BufferPool
 }
@@ -35,25 +33,19 @@ type zipFile struct {
 	Buffer   *bytes.Buffer
 }
 
-func newAlbumJob(album *zing.Album) (*albumJob, error) {
-	archive, err := ioutil.TempFile("/tmp", "album-")
-	if err != nil {
-		log.Error("Unable to create temp file", "error", err)
-		return nil, err
-	}
-
+func newAlbumJob(album *zing.Album, out io.Writer) (*albumJob, error) {
 	return &albumJob{
 		album:         album,
 		downloadQueue: make(chan zing.AlbumItem),
 		downloadSync:  &sync.WaitGroup{},
-		zipQueue:      make(chan zipFile),
+		zipQueue:      make(chan zipFile, 2),
 		zipSync:       &sync.WaitGroup{},
-		zipFile:       archive,
-		bufferPool:    bpool.NewBufferPool(8),
+		zipWriter:     out,
+		bufferPool:    bpool.NewBufferPool(12),
 	}, nil
 }
 
-func (a *albumJob) Start() {
+func (a *albumJob) Run() {
 	// Start N workers
 	a.downloadSync.Add(8)
 	for i := 0; i < 8; i++ {
@@ -108,7 +100,7 @@ func (a *albumJob) startDownloader() {
 func (a *albumJob) startZipper() {
 	defer a.zipSync.Done()
 
-	zipBuffer := zip.NewWriter(a.zipFile)
+	zipBuffer := zip.NewWriter(a.zipWriter)
 	defer zipBuffer.Close()
 
 	for file := range a.zipQueue {
@@ -168,18 +160,15 @@ func zingAlbumHandler(ctx *fasthttp.RequestCtx, params fasthttprouter.Params) {
 		return
 	}
 
-	job, err := newAlbumJob(album)
+	job, err := newAlbumJob(album, ctx.Response.BodyWriter())
 	if err != nil {
 		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
 		fmt.Fprint(ctx, err)
 		return
 	}
 
-	job.Start()
-
 	ctx.SetStatusCode(fasthttp.StatusOK)
-	job.zipFile.Seek(0, 0)
-	io.Copy(ctx, job.zipFile)
+	job.Run()
 }
 
 func main() {
