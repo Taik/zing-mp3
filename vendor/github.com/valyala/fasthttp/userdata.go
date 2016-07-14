@@ -1,5 +1,9 @@
 package fasthttp
 
+import (
+	"io"
+)
+
 type userDataKV struct {
 	key   []byte
 	value interface{}
@@ -35,7 +39,7 @@ func (d *userData) Set(key string, value interface{}) {
 }
 
 func (d *userData) SetBytes(key []byte, value interface{}) {
-	d.Set(unsafeBytesToStr(key), value)
+	d.Set(b2s(key), value)
 }
 
 func (d *userData) Get(key string) interface{} {
@@ -51,9 +55,17 @@ func (d *userData) Get(key string) interface{} {
 }
 
 func (d *userData) GetBytes(key []byte) interface{} {
-	return d.Get(unsafeBytesToStr(key))
+	return d.Get(b2s(key))
 }
 
 func (d *userData) Reset() {
+	args := *d
+	n := len(args)
+	for i := 0; i < n; i++ {
+		v := args[i].value
+		if vc, ok := v.(io.Closer); ok {
+			vc.Close()
+		}
+	}
 	*d = (*d)[:0]
 }

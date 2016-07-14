@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"sync"
 	"time"
 )
 
@@ -17,18 +18,45 @@ var (
 	CookieExpireUnlimited = zeroTime
 )
 
+// AcquireCookie returns an empty Cookie object from the pool.
+//
+// The returned object may be returned back to the pool with ReleaseCookie.
+// This allows reducing GC load.
+func AcquireCookie() *Cookie {
+	return cookiePool.Get().(*Cookie)
+}
+
+// ReleaseCookie returns the Cookie object acquired with AcquireCookie back
+// to the pool.
+//
+// Do not access released Cookie object, otherwise data races may occur.
+func ReleaseCookie(c *Cookie) {
+	c.Reset()
+	cookiePool.Put(c)
+}
+
+var cookiePool = &sync.Pool{
+	New: func() interface{} {
+		return &Cookie{}
+	},
+}
+
 // Cookie represents HTTP response cookie.
 //
 // Do not copy Cookie objects. Create new object and use CopyTo instead.
 //
-// It is unsafe modifying/reading Cookie instance from concurrently
-// running goroutines.
+// Cookie instance MUST NOT be used from concurrently running goroutines.
 type Cookie struct {
+	noCopy noCopy
+
 	key    []byte
 	value  []byte
 	expire time.Time
 	domain []byte
 	path   []byte
+
+	httpOnly bool
+	secure   bool
 
 	bufKV argsKV
 	buf   []byte
@@ -42,6 +70,28 @@ func (c *Cookie) CopyTo(src *Cookie) {
 	c.expire = src.expire
 	c.domain = append(c.domain[:0], src.domain...)
 	c.path = append(c.path[:0], src.path...)
+	c.httpOnly = src.httpOnly
+	c.secure = src.secure
+}
+
+// HTTPOnly returns true if the cookie is http only.
+func (c *Cookie) HTTPOnly() bool {
+	return c.httpOnly
+}
+
+// SetHTTPOnly sets cookie's httpOnly flag to the given value.
+func (c *Cookie) SetHTTPOnly(httpOnly bool) {
+	c.httpOnly = httpOnly
+}
+
+// Secure returns true if the cookie is secure.
+func (c *Cookie) Secure() bool {
+	return c.secure
+}
+
+// SetSecure sets cookie's secure flag to the given value.
+func (c *Cookie) SetSecure(secure bool) {
+	c.secure = secure
 }
 
 // Path returns cookie path.
@@ -73,7 +123,7 @@ func (c *Cookie) SetDomain(domain string) {
 	c.domain = append(c.domain[:0], domain...)
 }
 
-// SetDomain
+// SetDomainBytes sets cookie domain.
 func (c *Cookie) SetDomainBytes(domain []byte) {
 	c.domain = append(c.domain[:0], domain...)
 }
@@ -140,6 +190,8 @@ func (c *Cookie) Reset() {
 	c.expire = zeroTime
 	c.domain = c.domain[:0]
 	c.path = c.path[:0]
+	c.httpOnly = false
+	c.secure = false
 }
 
 // AppendBytes appends cookie representation to dst and returns
@@ -163,6 +215,14 @@ func (c *Cookie) AppendBytes(dst []byte) []byte {
 	}
 	if len(c.path) > 0 {
 		dst = appendCookiePart(dst, strCookiePath, c.path)
+	}
+	if c.httpOnly {
+		dst = append(dst, ';', ' ')
+		dst = append(dst, strCookieHTTPOnly...)
+	}
+	if c.secure {
+		dst = append(dst, ';', ' ')
+		dst = append(dst, strCookieSecure...)
 	}
 	return dst
 }
@@ -215,18 +275,25 @@ func (c *Cookie) ParseBytes(src []byte) error {
 		if len(kv.key) == 0 && len(kv.value) == 0 {
 			continue
 		}
-		switch {
-		case bytes.Equal(strCookieExpires, kv.key):
-			v := unsafeBytesToStr(kv.value)
+		switch string(kv.key) {
+		case "expires":
+			v := b2s(kv.value)
 			exptime, err := time.ParseInLocation(time.RFC1123, v, time.UTC)
 			if err != nil {
 				return err
 			}
 			c.expire = exptime
-		case bytes.Equal(strCookieDomain, kv.key):
+		case "domain":
 			c.domain = append(c.domain[:0], kv.value...)
-		case bytes.Equal(strCookiePath, kv.key):
+		case "path":
 			c.path = append(c.path[:0], kv.value...)
+		case "":
+			switch string(kv.value) {
+			case "HttpOnly":
+				c.httpOnly = true
+			case "secure":
+				c.secure = true
+			}
 		}
 	}
 	return nil
@@ -280,26 +347,27 @@ type cookieScanner struct {
 }
 
 func (s *cookieScanner) next(kv *argsKV, decode bool) bool {
-	if len(s.b) == 0 {
+	b := s.b
+	if len(b) == 0 {
 		return false
 	}
 
 	isKey := true
 	k := 0
-	for i, c := range s.b {
+	for i, c := range b {
 		switch c {
 		case '=':
 			if isKey {
 				isKey = false
-				kv.key = decodeCookieArg(kv.key, s.b[:i], decode)
+				kv.key = decodeCookieArg(kv.key, b[:i], decode)
 				k = i + 1
 			}
 		case ';':
 			if isKey {
 				kv.key = kv.key[:0]
 			}
-			kv.value = decodeCookieArg(kv.value, s.b[k:i], decode)
-			s.b = s.b[i+1:]
+			kv.value = decodeCookieArg(kv.value, b[k:i], decode)
+			s.b = b[i+1:]
 			return true
 		}
 	}
@@ -307,8 +375,8 @@ func (s *cookieScanner) next(kv *argsKV, decode bool) bool {
 	if isKey {
 		kv.key = kv.key[:0]
 	}
-	kv.value = decodeCookieArg(kv.value, s.b[k:], decode)
-	s.b = s.b[len(s.b):]
+	kv.value = decodeCookieArg(kv.value, b[k:], decode)
+	s.b = b[len(b):]
 	return true
 }
 

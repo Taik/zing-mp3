@@ -1,0 +1,54 @@
+hash: b467e9f6ce1bfeb051dfd7b45f9cb9af94be8e1a61c393d3fc38ba01d2c309c8
+updated: 2016-07-14T18:23:59.733526247-04:00
+imports:
+- name: github.com/andybalholm/cascadia
+  version: 3ad29d1ad1c4f2023e355603324348cf1f4b2d48
+- name: github.com/buaazp/fasthttprouter
+  version: 0729217d031ab353a3e34b94e8544e167f7ce9a4
+- name: github.com/djimenez/iconv-go
+  version: 8960e66bd3dacbc8773962b40eb82fc18c63c127
+- name: github.com/klauspost/compress
+  version: 14eb9c4951195779ecfbec34431a976de7335b0a
+  subpackages:
+  - flate
+  - gzip
+  - zlib
+- name: github.com/klauspost/cpuid
+  version: 09cded8978dc9e80714c4d85b0322337b0a1e5e0
+- name: github.com/klauspost/crc32
+  version: 19b0b332c9e4516a6370a0456e6182c3b5036720
+- name: github.com/mattn/go-colorable
+  version: 9056b7a9f2d1f2d96498d6d146acd1f9d5ed3d59
+- name: github.com/mattn/go-isatty
+  version: 56b76bdf51f7708750eac80fa38b952bb9f32639
+- name: github.com/mikkyang/id3-go
+  version: 0168d962f1d773af3e29867138593203b653782e
+  subpackages:
+  - v1
+  - v2
+  - encodedbytes
+- name: github.com/oxtoacart/bpool
+  version: 4e1c5567d7c2dd59fa4c7c83d34c2f3528b025d6
+- name: github.com/PuerkitoBio/goquery
+  version: f0d75731e0db647903c8611d00c7b85002751317
+- name: github.com/valyala/bytebufferpool
+  version: 8ebd0474e5a2f0a5c7a74ad2bf421a1d1a90264f
+- name: github.com/valyala/fasthttp
+  version: 886e5411604884629c566961ea8ed2cec074e4b1
+  subpackages:
+  - fasthttputil
+- name: golang.org/x/net
+  version: a728288923b47049b2ce791836767ffbe964a5bd
+  subpackages:
+  - html
+  - html/atom
+- name: golang.org/x/sys
+  version: b518c298ac9dc94b6ac0757394f50d10c5dfa25a
+  subpackages:
+  - unix
+- name: gopkg.in/inconshreveable/log15.v2
+  version: b105bd37f74e5d9dc7b6ad7806715c7a2b83fd3f
+  subpackages:
+  - stack
+  - term
+testImports: []

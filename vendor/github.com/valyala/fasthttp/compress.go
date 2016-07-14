@@ -1,13 +1,14 @@
 package fasthttp
 
 import (
-	"bytes"
-	"compress/flate"
-	"compress/gzip"
 	"fmt"
 	"io"
 	"os"
 	"sync"
+
+	"github.com/klauspost/compress/flate"
+	"github.com/klauspost/compress/gzip"
+	"github.com/klauspost/compress/zlib"
 )
 
 // Supported compression levels.
@@ -40,7 +41,10 @@ var gzipReaderPool sync.Pool
 func acquireFlateReader(r io.Reader) (io.ReadCloser, error) {
 	v := flateReaderPool.Get()
 	if v == nil {
-		zr := flate.NewReader(r)
+		zr, err := zlib.NewReader(r)
+		if err != nil {
+			return nil, err
+		}
 		return zr, nil
 	}
 	zr := v.(io.ReadCloser)
@@ -56,9 +60,9 @@ func releaseFlateReader(zr io.ReadCloser) {
 }
 
 func resetFlateReader(zr io.ReadCloser, r io.Reader) error {
-	zrr, ok := zr.(flate.Resetter)
+	zrr, ok := zr.(zlib.Resetter)
 	if !ok {
-		panic("BUG: flate.Reader doesn't implement flate.Resetter???")
+		panic("BUG: zlib.Reader doesn't implement zlib.Resetter???")
 	}
 	return zrr.Reset(r, nil)
 }
@@ -123,7 +127,7 @@ func AppendGzipBytesLevel(dst, src []byte, level int) []byte {
 	return w.b
 }
 
-// WriteGzip writes gzipped p to w using the given compression level
+// WriteGzipLevel writes gzipped p to w using the given compression level
 // and returns the number of compressed bytes written to w.
 //
 // Supported compression levels are:
@@ -139,7 +143,7 @@ func WriteGzipLevel(w io.Writer, p []byte, level int) (int, error) {
 	return n, err
 }
 
-// WriteGzipLevel writes gzipped p to w and returns the number of compressed
+// WriteGzip writes gzipped p to w and returns the number of compressed
 // bytes written to w.
 func WriteGzip(w io.Writer, p []byte) (int, error) {
 	return WriteGzipLevel(w, p, CompressDefaultCompression)
@@ -158,11 +162,28 @@ func WriteGunzip(w io.Writer, p []byte) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	n, err := io.Copy(w, zr)
+	n, err := copyZeroAlloc(w, zr)
 	releaseGzipReader(zr)
 	nn := int(n)
 	if int64(nn) != n {
 		return 0, fmt.Errorf("too much data gunzipped: %d", n)
+	}
+	return nn, err
+}
+
+// WriteInflate writes inflated p to w and returns the number of uncompressed
+// bytes written to w.
+func WriteInflate(w io.Writer, p []byte) (int, error) {
+	r := &byteSliceReader{p}
+	zr, err := acquireFlateReader(r)
+	if err != nil {
+		return 0, err
+	}
+	n, err := copyZeroAlloc(w, zr)
+	releaseFlateReader(zr)
+	nn := int(n)
+	if int64(nn) != n {
+		return 0, fmt.Errorf("too much data inflated: %d", n)
 	}
 	return nn, err
 }
@@ -204,9 +225,9 @@ func acquireFlateWriter(w io.Writer, level int) *flateWriter {
 
 	v := p.Get()
 	if v == nil {
-		zw, err := flate.NewWriter(w, level)
+		zw, err := zlib.NewWriterLevel(w, level)
 		if err != nil {
-			panic(fmt.Sprintf("BUG: unexpected error in flate.NewWriter(%d): %s", level, err))
+			panic(fmt.Sprintf("BUG: unexpected error in zlib.NewWriterLevel(%d): %s", level, err))
 		}
 		return &flateWriter{
 			Writer: zw,
@@ -224,7 +245,7 @@ func releaseFlateWriter(zw *flateWriter) {
 }
 
 type flateWriter struct {
-	*flate.Writer
+	*zlib.Writer
 	p *sync.Pool
 }
 
@@ -243,13 +264,13 @@ func isFileCompressible(f *os.File, minCompressRatio float64) bool {
 	// Try compressing the first 4kb of of the file
 	// and see if it can be compressed by more than
 	// the given minCompressRatio.
-	var buf bytes.Buffer
-	zw := acquireGzipWriter(&buf, CompressDefaultCompression)
+	b := AcquireByteBuffer()
+	zw := acquireGzipWriter(b, CompressDefaultCompression)
 	lr := &io.LimitedReader{
 		R: f,
 		N: 4096,
 	}
-	_, err := io.Copy(zw, lr)
+	_, err := copyZeroAlloc(zw, lr)
 	releaseGzipWriter(zw)
 	f.Seek(0, 0)
 	if err != nil {
@@ -257,6 +278,7 @@ func isFileCompressible(f *os.File, minCompressRatio float64) bool {
 	}
 
 	n := 4096 - lr.N
-	zn := len(buf.Bytes())
+	zn := len(b.B)
+	ReleaseByteBuffer(b)
 	return float64(zn) < float64(n)*minCompressRatio
 }

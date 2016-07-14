@@ -117,7 +117,7 @@ func (a *albumJob) startZipper() {
 			return
 		}
 
-		log.Debug("Copying buffer into item",
+		log.Debug("Copying buffer into zip file",
 			"filename", filename,
 		)
 

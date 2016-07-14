@@ -1,16 +1,15 @@
 language: go
 
 go:
-  - 1.5.2
-
-before_install:
-  - go get github.com/mitchellh/gox
+  - 1.6
 
 script:
   # build test for supported platforms
-  - gox -os="linux"
-  - gox -os="darwin"
-  - gox -os="freebsd"
+  - GOOS=linux go build
+  - GOOS=darwin go build
+  - GOOS=freebsd go build
+  - GOOS=windows go build
+  - GOARCH=386 go build
 
   # run tests on a standard platform
   - go test -v ./...

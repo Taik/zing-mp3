@@ -37,8 +37,6 @@ func (ln *InmemoryListener) Accept() (net.Conn, error) {
 }
 
 // Close implements net.Listener's Close.
-//
-// It is safe calling
 func (ln *InmemoryListener) Close() error {
 	var err error
 
@@ -66,7 +64,9 @@ func (ln *InmemoryListener) Addr() net.Addr {
 //
 // It is safe calling Dial from concurrently running goroutines.
 func (ln *InmemoryListener) Dial() (net.Conn, error) {
-	cConn, sConn := net.Pipe()
+	pc := NewPipeConns()
+	cConn := pc.Conn1()
+	sConn := pc.Conn2()
 	ln.lock.Lock()
 	if !ln.closed {
 		ln.conns <- sConn

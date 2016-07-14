@@ -84,6 +84,10 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
+var (
+	defaultContentType = []byte("text/plain; charset=utf-8")
+)
+
 // Handle is a function that can be registered to a route to handle HTTP
 // requests. Like http.HandlerFunc, but has a third parameter for the values of
 // wildcards (variables).
@@ -142,6 +146,10 @@ type Router struct {
 	// handler.
 	HandleMethodNotAllowed bool
 
+	// If enabled, the router automatically replies to OPTIONS requests.
+	// Custom OPTIONS handlers take priority over automatic replies.
+	HandleOPTIONS bool
+
 	// Configurable http.Handler which is called when no matching route is
 	// found. If it is not set, http.NotFound is used.
 	NotFound fasthttp.RequestHandler
@@ -149,6 +157,8 @@ type Router struct {
 	// Configurable http.Handler which is called when a request
 	// cannot be routed and HandleMethodNotAllowed is true.
 	// If it is not set, http.Error with http.StatusMethodNotAllowed is used.
+	// The "Allow" header with allowed request methods is set before the handler
+	// is called.
 	MethodNotAllowed fasthttp.RequestHandler
 
 	// Function to handle panics recovered from http handlers.
@@ -166,6 +176,7 @@ func New() *Router {
 		RedirectTrailingSlash:  true,
 		RedirectFixedPath:      true,
 		HandleMethodNotAllowed: true,
+		HandleOPTIONS:          true,
 	}
 }
 
@@ -269,16 +280,53 @@ func (r *Router) Lookup(method, path string) (Handle, Params, bool) {
 	return nil, nil, false
 }
 
+func (r *Router) allowed(path, reqMethod string) (allow string) {
+	if path == "*" || path == "/*" { // server-wide
+		for method := range r.trees {
+			if method == "OPTIONS" {
+				continue
+			}
+
+			// add request method to list of allowed methods
+			if len(allow) == 0 {
+				allow = method
+			} else {
+				allow += ", " + method
+			}
+		}
+	} else { // specific path
+		for method := range r.trees {
+			// Skip the requested method - we already tried this one
+			if method == reqMethod || method == "OPTIONS" {
+				continue
+			}
+
+			handle, _, _ := r.trees[method].getValue(path)
+			if handle != nil {
+				// add request method to list of allowed methods
+				if len(allow) == 0 {
+					allow = method
+				} else {
+					allow += ", " + method
+				}
+			}
+		}
+	}
+	if len(allow) > 0 {
+		allow += ", OPTIONS"
+	}
+	return
+}
+
 // Handler makes the router implement the fasthttp.ListenAndServe interface.
 func (r *Router) Handler(ctx *fasthttp.RequestCtx) {
 	if r.PanicHandler != nil {
 		defer r.recv(ctx)
 	}
 
+	path := string(ctx.Path())
 	method := string(ctx.Method())
 	if root := r.trees[method]; root != nil {
-		path := string(ctx.Path())
-
 		if f, ps, tsr := root.getValue(path); f != nil {
 			f(ctx, ps)
 			return
@@ -316,21 +364,25 @@ func (r *Router) Handler(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
-	// Handle 405
-	if r.HandleMethodNotAllowed {
-		for method := range r.trees {
-			// Skip the requested method - we already tried this one
-			if method == string(ctx.Method()) {
-				continue
+	if method == "OPTIONS" {
+		// Handle OPTIONS requests
+		if r.HandleOPTIONS {
+			if allow := r.allowed(path, method); len(allow) > 0 {
+				ctx.Response.Header.Set("Allow", allow)
+				return
 			}
-
-			f, _, _ := r.trees[method].getValue(string(ctx.Path()))
-			if f != nil {
+		}
+	} else {
+		// Handle 405
+		if r.HandleMethodNotAllowed {
+			if allow := r.allowed(path, method); len(allow) > 0 {
+				ctx.Response.Header.Set("Allow", allow)
 				if r.MethodNotAllowed != nil {
 					r.MethodNotAllowed(ctx)
 				} else {
-					ctx.Error(fasthttp.StatusMessage(fasthttp.StatusMethodNotAllowed),
-						fasthttp.StatusMethodNotAllowed)
+					ctx.SetStatusCode(fasthttp.StatusMethodNotAllowed)
+					ctx.SetContentTypeBytes(defaultContentType)
+					ctx.SetBodyString(fasthttp.StatusMessage(fasthttp.StatusMethodNotAllowed))
 				}
 				return
 			}

@@ -5,6 +5,8 @@
 * Supports byte range responses.
 * Generates directory index pages.
 * Supports TLS (aka SSL or HTTPS).
+* Supports virtual hosts.
+* Exports various stats on /stats path.
 
 # How to build
 

@@ -22,10 +22,11 @@ var (
 
 	strResponseContinue = []byte("HTTP/1.1 100 Continue\r\n\r\n")
 
-	strGet  = []byte("GET")
-	strHead = []byte("HEAD")
-	strPost = []byte("POST")
-	strPut  = []byte("PUT")
+	strGet    = []byte("GET")
+	strHead   = []byte("HEAD")
+	strPost   = []byte("POST")
+	strPut    = []byte("PUT")
+	strDelete = []byte("DELETE")
 
 	strExpect           = []byte("Expect")
 	strConnection       = []byte("Connection")
@@ -48,9 +49,11 @@ var (
 	strRange            = []byte("Range")
 	strContentRange     = []byte("Content-Range")
 
-	strCookieExpires = []byte("expires")
-	strCookieDomain  = []byte("domain")
-	strCookiePath    = []byte("path")
+	strCookieExpires  = []byte("expires")
+	strCookieDomain   = []byte("domain")
+	strCookiePath     = []byte("path")
+	strCookieHTTPOnly = []byte("HttpOnly")
+	strCookieSecure   = []byte("secure")
 
 	strClose               = []byte("close")
 	strGzip                = []byte("gzip")
